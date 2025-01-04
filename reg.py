@@ -1,6 +1,7 @@
 import streamlit as st
-import mysql.connector  # Using mysql.connector
-from mysql.connector import Error, IntegrityError  # For handling MySQL exceptions
+import mysql.connector
+from mysql.connector import Error, IntegrityError
+import io
 
 # MySQL database connection details
 host = "82.180.143.66"
@@ -8,91 +9,60 @@ user = "u263681140_students"
 passwd = "testStudents@123"
 db_name = "u263681140_students"
 
-# Function to create a database connection
-def get_db_connection():
+# Function to insert data into BusPassangers table
+def insert_data_into_buspassangers(name, gender, age, rfid, balance, photo_data):
     try:
+        # Establishing connection to the database
         conn = mysql.connector.connect(
             host=host,
             user=user,
             password=passwd,
             database=db_name
         )
-        return conn
-    except Error as e:
-        st.error(f"Error connecting to MySQL: {e}")
-        return None
-
-# Function to create table if it doesn't exist
-def create_table_if_not_exists():
-    conn = get_db_connection()
-    if conn:
         cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bot (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL UNIQUE,
-            password VARCHAR(255) NOT NULL
-        )
-        """)
+        
+        # Query to insert data into BusPassangers table
+        query = """INSERT INTO BusPassangers (Name, Gender, Age, RFID, Balance, photo)
+                   VALUES (%s, %s, %s, %s, %s, %s)"""
+        cursor.execute(query, (name, gender, age, rfid, balance, photo_data))
+        
+        # Commit changes and close the connection
         conn.commit()
+        cursor.close()
         conn.close()
-
-# Function to insert user data into the bot table
-def insert_user_data(name, email, password):
-    conn = get_db_connection()
-    if conn:
-        try:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO bot (name, email, password) VALUES (%s, %s, %s)",
-                           (name, email, password))
-            conn.commit()
-            conn.close()
-            return True
-        except mysql.connector.IntegrityError as e:
-            st.error(f"Error inserting data: Integrity issue (likely a duplicate email): {e}")
-            conn.close()
-            return False
-        except Error as e:
-            st.error(f"Error inserting data: Operational error: {e}")
-            conn.close()
-            return False
-    return False
-
-# Streamlit UI with Sidebar
-def main():
-    # Create the table if it doesn't exist
-    create_table_if_not_exists()
-
-    st.title("User Registration")
-
-    # Sidebar content
-    with st.sidebar:
-        st.header("Register New User")
         
-        # User inputs for registration form in the sidebar
-        name = st.text_input("Enter your name:")
-        email = st.text_input("Enter your email:")
-        password = st.text_input("Enter your password:", type="password")
+        st.success("Registration successful!")
+    except Error as e:
+        st.error(f"Database error: {e}")
+    except IntegrityError as e:
+        st.error(f"Database integrity error: {e}")
 
-        if st.button("Register"):
-            if name and email and password:
-                success = insert_user_data(name, email, password)
-                if success:
-                    st.success("User registered successfully!")
-                else:
-                    st.error("Registration failed. Try again.")
-            else:
-                st.warning("Please fill in all fields!")
+# Streamlit app
+st.title("BusPassangers Registration Form")
 
-    # Main content
-    st.write("""
-        ## Welcome to the User Registration Page
-        
-        Use the form on the left to register a new user. Your details will be stored in our database.
-        
-        Make sure your email is unique! If you have any questions or issues, feel free to contact support.
-    """)
+# Streamlit form for registration
+with st.form(key='registration_form'):
+    name = st.text_input("Name")
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+    age = st.number_input("Age", min_value=1, max_value=120)
+    rfid = st.text_input("RFID")
+    balance = st.number_input("Balance", min_value=0.0, step=0.01)
+    
+    # Upload photo (either from camera or file)
+    photo = st.file_uploader("Upload a photo", type=["jpg", "jpeg", "png"])
+    if photo is not None:
+        st.image(photo, caption="Uploaded Photo", use_column_width=True)
 
-if __name__ == "__main__":
-    main()
+    # Submit button for form
+    submit_button = st.form_submit_button(label="Register")
+
+# Handle the form submission
+if submit_button:
+    if name and gender and age and rfid and balance and photo:
+        # Convert image to binary for storage in database
+        img_data = photo.read()
+
+        # Insert the data into the BusPassangers table
+        insert_data_into_buspassangers(name, gender, age, rfid, balance, img_data)
+    else:
+        st.warning("Please fill out all fields and upload a photo.")
